@@ -178,6 +178,16 @@ def cmd_scan_dir(args: argparse.Namespace, source_path: Path) -> int:
     return 0
 
 
+def cmd_scan_convert(args: argparse.Namespace) -> int:
+    from .convert import run_convert
+    return run_convert(
+        run_dir=Path(args.run),
+        output_dir=Path(args.output),
+        mapping_path=Path(args.mapping),
+        dry_run=args.dry_run,
+    )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         prog="skita",
@@ -195,5 +205,26 @@ def main() -> None:
     )
     scan_p.add_argument("--run-name", help="Override the generated run name")
 
+    sc_p = sub.add_parser("scan-convert", help="Convert scan output to DITA files")
+    sc_p.add_argument(
+        "--run", required=True, metavar="RUN_DIR",
+        help="Sidecar run dir containing model.json",
+    )
+    sc_p.add_argument(
+        "--output", required=True, metavar="OUTPUT_DIR",
+        help="Base path for DITA output (e.g. aem-dita/content/)",
+    )
+    sc_p.add_argument(
+        "--mapping", default="./mapping.csv", metavar="MAPPING_CSV",
+        help="Path to mapping.csv (default: ./mapping.csv)",
+    )
+    sc_p.add_argument(
+        "--dry-run", action="store_true",
+        help="Print what would be written without writing files",
+    )
+
     args = ap.parse_args()
-    sys.exit(cmd_scan(args))
+    if args.command == "scan":
+        sys.exit(cmd_scan(args))
+    elif args.command == "scan-convert":
+        sys.exit(cmd_scan_convert(args))
