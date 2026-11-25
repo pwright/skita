@@ -57,3 +57,34 @@ class RunManifest:
     timestamp: str
     span_count: int
     finding_count: int
+
+
+@dataclass
+class FileResult:
+    relative_path: str    # e.g. 'guide/intro.md' (forward-slash)
+    source_path: str      # absolute path
+    source_hash: str      # empty when skipped or errored
+    run_id: str
+    span_count: int
+    finding_count: int
+    blocking_count: int
+    advisory_count: int
+    skipped: bool
+    error: str            # non-empty when parse/analysis raised
+
+
+@dataclass
+class BatchManifest:
+    skita_version: str
+    source_dir: str
+    run_id: str
+    timestamp: str
+    file_count: int
+    ignored_count: int
+    processed_count: int
+    error_count: int
+    total_span_count: int
+    total_finding_count: int
+    blocking_count: int
+    advisory_count: int
+    files: list[FileResult] = field(default_factory=list)

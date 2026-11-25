@@ -92,7 +92,9 @@ At analysis time, skita reads `reviews.json` and applies reviewed assignments be
 
 ## Artifact Contract
 
-Each `skita scan` invocation creates a named run directory under `<sidecar>/runs/`. The run name defaults to `<timestamp>-<source-hash-prefix>` and may be overridden with `--run-name`.
+Each `skita scan` invocation creates a named run directory under `<sidecar>/runs/`. The run name defaults to `<timestamp>-<source-hash-prefix>` for single-file scans and `<timestamp>-<dir-name>` for directory scans. `--run-name` overrides the generated name in both modes.
+
+**Single-file run layout:**
 
 | File | Contents |
 |---|---|
@@ -101,7 +103,21 @@ Each `skita scan` invocation creates a named run directory under `<sidecar>/runs
 | `manifest.json` | Run metadata: skita version, source path, hash, timestamp, counts |
 | `report.md` | Human-readable summary: span tree, findings by severity, inventory |
 
-Runs with identical source input and identical `reviews.json` produce byte-identical output. Source files are never modified.
+**Directory (batch) run layout:**
+
+```
+<run-dir>/
+  index.json          ← batch manifest: file count, totals, per-file summary
+  summary.md          ← human-readable aggregate report
+  files/
+    <relative-path>/  ← one subdir per processed file (e.g. guide/intro.md/)
+      model.json
+      findings.json
+      manifest.json
+      report.md
+```
+
+Ignored files (matched by `.skignore`) and errored files are recorded in `index.json` but produce no `files/` subdirectory. Runs with identical source input and identical `reviews.json` produce byte-identical output. Source files are never modified.
 
 ## Findings
 
@@ -132,18 +148,35 @@ skita's scope is deliberately constrained for the MVP.
 ## Usage
 
 ```bash
-# Run directly (no installation required)
+# Scan a single file
 ./skita scan <source-file> --sidecar <sidecar-dir>
 
+# Scan a directory (walks recursively for *.md)
+./skita scan <source-dir> --sidecar <sidecar-dir>
+
 # Override the run name
-./skita scan <source-file> --sidecar <sidecar-dir> --run-name my-review
+./skita scan <source-dir> --sidecar <sidecar-dir> --run-name my-review
 
 # Install via pip, then use from PATH
 pip install -e .
-skita scan <source-file> --sidecar <sidecar-dir>
+skita scan <source-dir> --sidecar <sidecar-dir>
 ```
 
-Exit code is 0 when no blocking findings are present, 1 when blocking findings exist or the source file cannot be read.
+### .skignore
+
+Place a `.skignore` file in the **working directory where you invoke skita** to exclude files or subtrees from directory scans. Single-file scans ignore `.skignore`.
+
+```
+# ignore the drafts subtree
+drafts
+
+# ignore all files matching a glob
+*.wip.md
+```
+
+Each non-comment line is matched against the full relative path of each file and against each path component individually, using shell-glob syntax (`*`, `?`, `[...]`). A bare directory name like `drafts` excludes the entire subtree.
+
+Exit code is 0 when no blocking findings are present, 1 when blocking findings exist or the source path cannot be read.
 
 ## Reference Corpus
 

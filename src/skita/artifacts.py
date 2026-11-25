@@ -5,7 +5,7 @@ import dataclasses
 import json
 from pathlib import Path
 
-from .model import Finding, RunManifest, SourceContainer, TopicSpan
+from .model import BatchManifest, FileResult, Finding, RunManifest, SourceContainer, TopicSpan
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +121,82 @@ def _build_report(container: SourceContainer, findings: list[Finding], manifest:
 
 
 # ---------------------------------------------------------------------------
+# Batch report builder
+# ---------------------------------------------------------------------------
+
+def _build_batch_summary(batch: BatchManifest) -> str:
+    lines: list[str] = [
+        "# Skita Batch Scan Report",
+        "",
+        f"**Source dir:** `{batch.source_dir}`  ",
+        f"**Run:** `{batch.run_id}`  ",
+        f"**Timestamp:** {batch.timestamp}",
+        "",
+        "## Summary",
+        "",
+        "| Metric | Value |",
+        "|---|---|",
+        f"| .md files found | {batch.file_count} |",
+        f"| Processed | {batch.processed_count} |",
+        f"| Ignored (.skignore) | {batch.ignored_count} |",
+        f"| Errors | {batch.error_count} |",
+        f"| Total spans | {batch.total_span_count} |",
+        f"| Total findings | {batch.total_finding_count} |",
+        f"| Blocking | {batch.blocking_count} |",
+        f"| Advisory | {batch.advisory_count} |",
+        "",
+        "## Files",
+        "",
+        "| File | Spans | Findings | Blocking | Advisory | Status |",
+        "|---|---|---|---|---|---|",
+    ]
+
+    for fr in batch.files:
+        if fr.skipped:
+            continue
+        if fr.error:
+            status = "error"
+            spans = advisory = blocking = findings = "—"
+        elif fr.blocking_count:
+            status = "**BLOCKING**"
+            spans = str(fr.span_count)
+            findings = str(fr.finding_count)
+            blocking = str(fr.blocking_count)
+            advisory = str(fr.advisory_count)
+        else:
+            status = "ok"
+            spans = str(fr.span_count)
+            findings = str(fr.finding_count)
+            blocking = str(fr.blocking_count)
+            advisory = str(fr.advisory_count)
+        lines.append(
+            f"| `{fr.relative_path}` | {spans} | {findings} | {blocking} | {advisory} | {status} |"
+        )
+
+    lines.append("")
+
+    errors = [fr for fr in batch.files if fr.error]
+    if errors:
+        lines += ["## Errors", ""]
+        for fr in errors:
+            lines.append(f"- `{fr.relative_path}`: {fr.error}")
+        lines.append("")
+
+    blocking_files = [fr for fr in batch.files if fr.blocking_count]
+    if blocking_files:
+        lines += ["## Blocking Findings", ""]
+        for fr in blocking_files:
+            report_path = f"files/{fr.relative_path}/report.md"
+            lines.append(
+                f"- `{fr.relative_path}`: {fr.blocking_count} blocking finding(s)"
+                f" — see `{report_path}`"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -143,4 +219,20 @@ def write_run(
     )
     (run_dir / "report.md").write_text(
         _build_report(container, findings, manifest), encoding="utf-8"
+    )
+
+
+def write_batch_run(
+    batch_run_dir: Path,
+    batch_manifest: BatchManifest,
+    file_results: list[tuple[str, SourceContainer, list[Finding], RunManifest]],
+) -> None:
+    batch_run_dir.mkdir(parents=True, exist_ok=True)
+    for rel_path, container, findings, manifest in file_results:
+        write_run(batch_run_dir / "files" / rel_path, container, findings, manifest)
+    (batch_run_dir / "index.json").write_text(
+        json.dumps(dataclasses.asdict(batch_manifest), indent=2), encoding="utf-8"
+    )
+    (batch_run_dir / "summary.md").write_text(
+        _build_batch_summary(batch_manifest), encoding="utf-8"
     )
